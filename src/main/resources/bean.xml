@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="
+        http://www.springframework.org/schema/beans 
+        https://www.springframework.org/schema/beans/spring-beans.xsd
+        http://www.springframework.org/schema/context 
+        https://www.springframework.org/schema/context/spring-context.xsd">
+
+    <!-- Register SqlQueries bean with the SQL stored as a property -->
+    <bean id="sqlQueries" class="com.example.restapi.config.SqlQueries">
+        <property name="invoiceQuery">
+            <value>
+                <![CDATA[
+WITH latest_client AS (
+    SELECT DISTINCT ON (i.client_id, i.invoice_month)
+        i.client_id, i.invoice_month, c.client_name
+    FROM invoice i
+    JOIN client c ON i.client_id = c.client_id
+        AND c.start_date <= i.invoice_month
+        AND c.active_inactive_record = 0
+    WHERE i.client_id = :clientId
+    ORDER BY i.client_id, i.invoice_month, c.posted_timestamp DESC
+),
+latest_department AS (
+    SELECT DISTINCT ON (i.client_id, i.department_id, i.invoice_month)
+        i.client_id, i.department_id, i.invoice_month, d.department_name
+    FROM invoice i
+    JOIN department d ON i.client_id = d.client_id
+        AND i.department_id::text = d.department_id
+        AND d.start_date <= i.invoice_month
+        AND d.active_inactive_record = FALSE
+    ORDER BY i.client_id, i.department_id, i.invoice_month, d.posted_timestamp DESC
+)
+SELECT 
+    lc.client_name,
+    ld.department_name,
+    i.invoice_month,
+    i.billed_amount,
+    i.paid_amount,
+    i.outstanding_amount
+FROM invoice i
+JOIN latest_client lc ON i.client_id = lc.client_id AND i.invoice_month = lc.invoice_month
+JOIN latest_department ld ON i.client_id = ld.client_id AND i.department_id = ld.department_id AND i.invoice_month = ld.invoice_month
+WHERE i.client_id = :clientId AND i.invoice_month >= :startDate
+                ]]>
+            </value>
+        </property>
+    </bean>
+
+</beans>
